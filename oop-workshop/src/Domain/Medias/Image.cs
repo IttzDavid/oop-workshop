@@ -1,13 +1,14 @@
 using oop_workshop.Domain.Interfaces;
 
-namespace oop_workshop.Domain.Media
+namespace oop_workshop.Domain.Medias
 {
-    public class Image(string title, int year, string resolution, string format, double fileSize, string dateTaken) : Media(title, year), IDownloadable, IViewable
+    public class Image(string title, int year, string resolution, string fileFormat, double fileSize, DateTime dateTaken)
+        : Media(title, year), IDownloadable, IViewable
     {
         public string Resolution { get; set; } = resolution;
-        public string Format { get; set; } = format;
+        public string FileFormat { get; set; } = fileFormat;
         public double FileSize { get; set; } = fileSize;
-        public string DateTaken { get; set; } = dateTaken;
+        public DateTime DateTaken { get; set; } = dateTaken;
 
         public void Download() => Console.WriteLine($"Downloading the image: {Title}...");
         public void View() => Console.WriteLine($"Displaying the image: {Title}...");
@@ -16,9 +17,9 @@ namespace oop_workshop.Domain.Media
         {
             base.DisplayDetails();
             Console.WriteLine($"Resolution: {Resolution}");
-            Console.WriteLine($"Format: {Format}");
+            Console.WriteLine($"File Format: {FileFormat}");
             Console.WriteLine($"File Size: {FileSize} MB");
-            Console.WriteLine($"Date Taken: {DateTaken}");
+            Console.WriteLine($"Date Taken: {DateTaken:yyyy-MM-dd}");
         }
     }
 }

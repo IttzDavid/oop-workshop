@@ -1,8 +1,9 @@
 using oop_workshop.Domain.Interfaces;
 
-namespace oop_workshop.Domain.Media
+namespace oop_workshop.Domain.Medias
 {
-    public class EBook(string title, int year, string author, string language, int pages, string isbn) : Media(title, year), IDownloadable, IReadable
+    public class EBook(string title, int year, string author, string language, int pages, string isbn)
+        : Media(title, year), IDownloadable, IReadable
     {
         public string Author { get; set; } = author;
         public string Language { get; set; } = language;

@@ -1,8 +1,9 @@
 using oop_workshop.Domain.Interfaces;
 
-namespace oop_workshop.Domain.Media
+namespace oop_workshop.Domain.Medias
 {
-    public class Movie(string title, int year, string director, string genre, string language, int duration) : Media(title, year), IDownloadable, IViewable
+    public class Movie(string title, int year, string director, string genre, string language, int duration)
+        : Media(title, year), IDownloadable, IViewable
     {
         public string Director { get; set; } = director;
         public string Genre { get; set; } = genre;

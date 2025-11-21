@@ -74,7 +74,7 @@ The system must also support three categories of users: Admin, Employee and Borr
 - **Employee** is responsible for managing the collection with the ability to add or remove media items
 - **Admin** has *Employee's* rights and additionally manage "Borrowers" and "Employees"(view, create, delete, update their personal information).  
 Both user categories should have a clear and structured menu of the above mentioned actions.
-      
+
 The console interface should guide the user with clear instructions and validate all inputs. Errors or invalid actions should be handled beforehand. The design should anticipate growth in extensibility, ensuring that new media types or user roles can be added without disrupting existing functionality.
 
 #### Exercise
