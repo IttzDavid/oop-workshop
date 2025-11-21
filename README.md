@@ -1,8 +1,8 @@
 # oop-workshop
 
-David Takac
-Samuel Toman
-Adam Kondrcik
+In this OOP workshop we were tasked to make a system for Sønderborg’s library. Made by David Takac, Samuel Toman and Adam Kondrcik.
+
+# Functional and Non-Functional Requirements
 
 | Functional Requirement                                       | Description                                                                 |
 |--------------------------------------------------------------|-----------------------------------------------------------------------------|
@@ -24,3 +24,100 @@ Adam Kondrcik
 | **4. Security**                                                | The system must be secure.                                                  |
 | **5. Usability**                                               | The system must guide the user with easy to understand instructions and verify inputs. |
 | **6. Maintainability**                                         | The system must be easy to maintain.                                        |
+
+# CRC and UML Diagram
+```mermaid
+classDiagram
+    class Admin {
+        +String name
+        +String age
+        +String ssn
+        +addMediaItem()
+        +manageEmployees()
+        +viewUsers()
+    }
+
+    class Employee {
+        +String name
+        +String age
+        +String ssn
+        +addMediaItem()
+        +viewUsers()
+    }
+
+    class Borrower {
+        +String name
+        +String age
+        +String ssn
+        +viewMediaItems()
+        +rateItem()
+    }
+
+    class MediaItem {
+        +String title
+        +String genre
+        +String releaseYear
+        +download()
+        +viewDetails()
+    }
+
+    class Ebook {
+        +String author
+        +String language
+        +int pages
+        +String ISBN
+    }
+
+    class Movie {
+        +String director
+        +String genre
+        +String language
+        +int duration
+    }
+
+    class Song {
+        +String composer
+        +String singer
+        +String genre
+        +String language
+        +int duration
+    }
+
+    class VideoGame {
+        +String publisher
+        +String platform
+        +int releaseYear
+    }
+
+    class App {
+        +String version
+        +String platform
+        +String fileSize
+    }
+
+    class Podcast {
+        +String host
+        +String guest
+        +int episodeNumber
+        +String language
+    }
+
+    class Image {
+        +String resolution
+        +String fileFormat
+        +String dateTaken
+    }
+
+    Admin --|> Employee : manages >
+    Admin --|> Borrower : manages >
+    Admin --> MediaItem : manage >
+    Employee --> MediaItem : add/view >
+    Borrower --> MediaItem : view/rate >
+
+    MediaItem <|-- Ebook : inherits >
+    MediaItem <|-- Movie : inherits >
+    MediaItem <|-- Song : inherits >
+    MediaItem <|-- VideoGame : inherits >
+    MediaItem <|-- App : inherits >
+    MediaItem <|-- Podcast : inherits >
+    MediaItem <|-- Image : inherits >
