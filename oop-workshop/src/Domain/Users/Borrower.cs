@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using oop_workshop.Domain.Interfaces;
 using oop_workshop.Domain.Medias;
 
@@ -9,6 +11,7 @@ namespace oop_workshop.Domain.Users
         public IReadOnlyCollection<Media> CurrentlyBorrowed => _currentlyBorrowed.AsReadOnly();
 
         public Borrower(string name, int age, string cpr) : base(name, age, cpr) { }
+        public Borrower(string id, string name, int age, string cpr) : base(id, name, age, cpr) { }
 
         public void BorrowMedia(Media media, DateTime dueDate)
         {

@@ -1,9 +1,13 @@
+using System.Linq;
 using oop_workshop.Domain;
 
 namespace oop_workshop.Domain.Users
 {
-    public class Admin(string name, int age, string cpr) : Employee(name, age, cpr)
+    public class Admin : Employee
     {
+        public Admin(string name, int age, string cpr) : base(name, age, cpr) { }
+        public Admin(string id, string name, int age, string cpr) : base(id, name, age, cpr) { }
+
         public Borrower CreateBorrower(UserManager userManager, string name, int age, string cpr)
         {
             var b = new Borrower(name, age, cpr);

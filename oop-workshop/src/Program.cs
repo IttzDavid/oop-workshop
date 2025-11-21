@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Linq;
 using oop_workshop.Domain;
 using oop_workshop.Domain.Interfaces;
@@ -6,46 +7,79 @@ using oop_workshop.Domain.Medias;
 using oop_workshop.Domain.Users;
 using oop_workshop.Persistence;
 
-Console.WriteLine("Welcome to Sønderborg Library's Digital Platform!");
+var baseDir = AppContext.BaseDirectory;
+var projectRoot = Path.GetFullPath(Path.Combine(baseDir, "..", "..", ".."));
+var dataDir = Path.Combine(projectRoot, "var");
+Directory.CreateDirectory(dataDir);
 
-var mediaItems = CsvLoader.LoadMedia(@"..\..\..\..\var\data.csv");
+var mediaFile = Path.Combine(dataDir, "data.csv");
+var usersFile = Path.Combine(dataDir, "users.csv");
+
+Console.WriteLine("Welcome to Sønderborg Library's Digital Platform!");
+var mediaItems = CsvLoader.LoadMedia(mediaFile);
 var library = new Library(mediaItems);
 
-var users = new UserManager();
-var defaultAdmin = new Admin("Admin", 40, "000000-0000");
-users.AddAdmin(defaultAdmin);
-var defaultEmployee = new Employee("Employee", 30, "111111-1111");
-users.AddEmployee(defaultEmployee);
-var defaultBorrower = new Borrower("Borrower", 20, "222222-2222");
-users.AddBorrower(defaultBorrower);
+var users = UsersCsvPersistence.LoadUsers(usersFile);
 
-Console.WriteLine($"Loaded {library.GetAllMedia().Count()} media items.\n");
-
-Console.WriteLine("Select role:");
-Console.WriteLine("1. Borrower");
-Console.WriteLine("2. Employee");
-Console.WriteLine("3. Admin");
-Console.Write("Choice: ");
-var roleChoice = Console.ReadLine();
-
-User activeUser = roleChoice switch
+if (!users.GetAllUsers().Any())
 {
-    "1" => defaultBorrower,
-    "2" => defaultEmployee,
-    "3" => defaultAdmin,
-    _ => defaultBorrower
-};
+    Console.WriteLine("No users found in CSV. Create initial Admin to proceed.");
+    var name = PromptString("Admin Name (required)", required: true);
+    var age = PromptInt("Admin Age (number)", allowZero: false);
+    var cpr = PromptString("Admin CPR (required)", required: true);
+    users.AddAdmin(new Admin(name, age, cpr));
+    UsersCsvPersistence.SaveUsers(usersFile, users);
+    Console.WriteLine("Initial Admin created and persisted.\n");
+}
+
+Console.WriteLine($"Loaded {library.GetAllMedia().Count()} media items.");
+Console.WriteLine("Select role:");
+int optionIndex = 1;
+var roleOptions = users.GetAllUsers()
+    .GroupBy(u => u.GetType().Name)
+    .ToDictionary(g => g.Key, g => g.ToList());
+
+string[] order = { "Borrower", "Employee", "Admin" };
+var availableRoles = order.Where(r => roleOptions.ContainsKey(r)).ToList();
+
+foreach (var r in availableRoles)
+{
+    Console.WriteLine($"{optionIndex}. {r} ({roleOptions[r].Count} available)");
+    optionIndex++;
+}
+Console.WriteLine("0. Exit");
+Console.Write("Choice: ");
+var choice = Console.ReadLine();
+
+if (choice == "0")
+{
+    Console.WriteLine("Goodbye!");
+    return;
+}
+
+int chosenIdx = int.TryParse(choice, out var parsed) ? parsed : -1;
+User activeUser;
+if (chosenIdx >= 1 && chosenIdx <= availableRoles.Count)
+{
+    var roleName = availableRoles[chosenIdx - 1];
+    activeUser = roleOptions[roleName].First();
+}
+else
+{
+    Console.WriteLine("Invalid selection. Defaulting to first available user.");
+    activeUser = users.GetAllUsers().First();
+}
 
 Console.WriteLine($"\nLogged in as: {activeUser.Name} ({activeUser.GetType().Name})");
 
-if (activeUser is Borrower borrower) BorrowerMenu(borrower, library);
-else if (activeUser is Admin admin) AdminMenu(admin, library, users);
-else if (activeUser is Employee employee) EmployeeMenu(employee, library);
+if (activeUser is Borrower borrower) BorrowerMenu(borrower, library, mediaFile);
+else if (activeUser is Admin admin) AdminMenu(admin, library, users, mediaFile, usersFile);
+else if (activeUser is Employee employee) EmployeeMenu(employee, library, mediaFile);
 
 Console.WriteLine("Goodbye!");
 
 // Borrower menu
-static void BorrowerMenu(Borrower borrower, Library library)
+static void BorrowerMenu(Borrower borrower, Library library, string mediaFile)
 {
     while (true)
     {
@@ -77,6 +111,7 @@ static void BorrowerMenu(Borrower borrower, Library library)
                     {
                         borrower.BorrowMedia(m3, DateTime.Today.AddDays(14));
                         Console.WriteLine("Borrowed.");
+                        CsvLoader.SaveMedia(mediaFile, library.GetAllMedia());
                     }
                     catch (Exception ex) { Console.WriteLine($"Error: {ex.Message}"); }
                 }
@@ -89,6 +124,7 @@ static void BorrowerMenu(Borrower borrower, Library library)
                     {
                         borrower.ReturnMedia(m4);
                         Console.WriteLine("Returned.");
+                        CsvLoader.SaveMedia(mediaFile, library.GetAllMedia());
                     }
                     catch (Exception ex) { Console.WriteLine($"Error: {ex.Message}"); }
                 }
@@ -97,17 +133,14 @@ static void BorrowerMenu(Borrower borrower, Library library)
                 var m5 = SelectMedia(library);
                 if (m5 != null)
                 {
-                    Console.Write("Score (1-5): ");
-                    if (int.TryParse(Console.ReadLine(), out var score))
+                    var score = PromptInt("Score (1-5)", min: 1, max: 5);
+                    try
                     {
-                        try
-                        {
-                            borrower.RateMedia(m5, score);
-                            Console.WriteLine("Rated.");
-                        }
-                        catch (Exception ex) { Console.WriteLine($"Error: {ex.Message}"); }
+                        borrower.RateMedia(m5, score);
+                        Console.WriteLine("Rated.");
+                        CsvLoader.SaveMedia(mediaFile, library.GetAllMedia());
                     }
-                    else Console.WriteLine("Invalid score.");
+                    catch (Exception ex) { Console.WriteLine($"Error: {ex.Message}"); }
                 }
                 break;
             case "6":
@@ -122,13 +155,13 @@ static void BorrowerMenu(Borrower borrower, Library library)
 }
 
 // Employee menu
-static void EmployeeMenu(Employee employee, Library library)
+static void EmployeeMenu(Employee employee, Library library, string mediaFile)
 {
     while (true)
     {
         Console.WriteLine("\n--- Employee Menu ---");
         Console.WriteLine("1. List all media");
-        Console.WriteLine("2. Add media (simple)");
+        Console.WriteLine("2. Add media");
         Console.WriteLine("3. Remove media");
         Console.WriteLine("0. Exit");
         Console.Write("Select: ");
@@ -141,17 +174,22 @@ static void EmployeeMenu(Employee employee, Library library)
                 foreach (var m in library.GetAllMedia()) { m.DisplayDetails(); Console.WriteLine("-----"); }
                 break;
             case "2":
-                var newMedia = CreateMediaStub();
+                var newMedia = CreateMediaInteractive();
                 if (newMedia != null)
                 {
                     employee.AddMedia(library, newMedia);
                     Console.WriteLine("Media added.");
+                    CsvLoader.SaveMedia(mediaFile, library.GetAllMedia());
                 }
                 break;
             case "3":
-                Console.Write("Title to remove: ");
-                var title = Console.ReadLine();
-                Console.WriteLine(library.RemoveMedia(title ?? "") ? "Removed." : "Not found.");
+                var title = PromptString("Title to remove", required: true);
+                if (library.RemoveMedia(title))
+                {
+                    Console.WriteLine("Removed.");
+                    CsvLoader.SaveMedia(mediaFile, library.GetAllMedia());
+                }
+                else Console.WriteLine("Not found.");
                 break;
             default:
                 Console.WriteLine("Invalid option.");
@@ -161,7 +199,7 @@ static void EmployeeMenu(Employee employee, Library library)
 }
 
 // Admin menu
-static void AdminMenu(Admin admin, Library library, UserManager users)
+static void AdminMenu(Admin admin, Library library, UserManager users, string mediaFile, string usersFile)
 {
     while (true)
     {
@@ -181,40 +219,46 @@ static void AdminMenu(Admin admin, Library library, UserManager users)
         switch (input)
         {
             case "1":
-                EmployeeMenu(admin, library);
+                EmployeeMenu(admin, library, mediaFile);
                 break;
             case "2":
                 foreach (var u in users.GetAllUsers())
                     Console.WriteLine($"{u.GetType().Name} - {u.Name} - Age {u.Age} - Id {u.Id}");
                 break;
             case "3":
-                Console.Write("Name: "); var bn = Console.ReadLine();
-                Console.Write("Age: "); int.TryParse(Console.ReadLine(), out var ba);
-                Console.Write("CPR: "); var bc = Console.ReadLine();
-                admin.CreateBorrower(users, bn ?? "Borrower", ba, bc ?? "000000-0000");
+                var bn = PromptString("Borrower Name", required: true);
+                var ba = PromptInt("Borrower Age", allowZero: false);
+                var bc = PromptString("Borrower CPR", required: true);
+                admin.CreateBorrower(users, bn, ba, bc);
+                UsersCsvPersistence.SaveUsers(usersFile, users);
                 Console.WriteLine("Borrower created.");
                 break;
             case "4":
-                Console.Write("Name: "); var en = Console.ReadLine();
-                Console.Write("Age: "); int.TryParse(Console.ReadLine(), out var ea);
-                Console.Write("CPR: "); var ec = Console.ReadLine();
-                admin.CreateEmployee(users, en ?? "Employee", ea, ec ?? "111111-1111");
+                var en = PromptString("Employee Name", required: true);
+                var ea = PromptInt("Employee Age", allowZero: false);
+                var ec = PromptString("Employee CPR", required: true);
+                admin.CreateEmployee(users, en, ea, ec);
+                UsersCsvPersistence.SaveUsers(usersFile, users);
                 Console.WriteLine("Employee created.");
                 break;
             case "5":
-                Console.Write("User Id: "); var uid = Console.ReadLine();
-                Console.Write("New Name (blank skip): "); var nn = Console.ReadLine();
-                Console.Write("New Age (blank skip): "); var naStr = Console.ReadLine();
-                int? newAge = int.TryParse(naStr, out var parsedAge) ? parsedAge : null;
-                Console.WriteLine(admin.UpdateUser(users, uid ?? "", nn, newAge) ? "Updated." : "Not found.");
+                var uid = PromptString("User Id", required: true);
+                var nn = PromptString("New Name (blank skip)", required: false);
+                Console.Write("New Age (blank skip): ");
+                var naStr = Console.ReadLine();
+                int? newAge = int.TryParse(naStr, out var parsedAge) && parsedAge > 0 ? parsedAge : null;
+                Console.WriteLine(admin.UpdateUser(users, uid, string.IsNullOrWhiteSpace(nn) ? null : nn, newAge) ? "Updated." : "Not found.");
+                UsersCsvPersistence.SaveUsers(usersFile, users);
                 break;
             case "6":
-                Console.Write("Borrower Id: "); var bid = Console.ReadLine();
-                Console.WriteLine(admin.DeleteBorrower(users, bid ?? "") ? "Deleted." : "Not found.");
+                var bid = PromptString("Borrower Id", required: true);
+                Console.WriteLine(admin.DeleteBorrower(users, bid) ? "Deleted." : "Not found.");
+                UsersCsvPersistence.SaveUsers(usersFile, users);
                 break;
             case "7":
-                Console.Write("Employee Id: "); var eid = Console.ReadLine();
-                Console.WriteLine(admin.DeleteEmployee(users, eid ?? "") ? "Deleted." : "Not found.");
+                var eid = PromptString("Employee Id", required: true);
+                Console.WriteLine(admin.DeleteEmployee(users, eid) ? "Deleted." : "Not found.");
+                UsersCsvPersistence.SaveUsers(usersFile, users);
                 break;
             default:
                 Console.WriteLine("Invalid option.");
@@ -223,12 +267,11 @@ static void AdminMenu(Admin admin, Library library, UserManager users)
     }
 }
 
-// Helpers
+// Helpers for listing and selection
 static void ListByType(Library library)
 {
-    Console.Write("Type (EBook/Movie/Song/VideoGame/App/Podcast/Image): ");
-    var type = Console.ReadLine()?.ToLower();
-    IEnumerable<Media> items = type switch
+    var type = PromptString("Type (EBook/Movie/Song/VideoGame/App/Podcast/Image)", required: true).ToLower();
+    var items = type switch
     {
         "ebook" => library.GetMediaByType<EBook>(),
         "movie" => library.GetMediaByType<Movie>(),
@@ -249,11 +292,8 @@ static Media? SelectMedia(Library library)
     if (!all.Any()) { Console.WriteLine("No media."); return null; }
     for (int i = 0; i < all.Count; i++)
         Console.WriteLine($"{i + 1}. {all[i].Title} ({all[i].GetType().Name})");
-    Console.Write("Select number: ");
-    if (int.TryParse(Console.ReadLine(), out var idx) && idx >= 1 && idx <= all.Count)
-        return all[idx - 1];
-    Console.WriteLine("Invalid selection.");
-    return null;
+    var idx = PromptInt("Select number", min: 1, max: all.Count);
+    return all[idx - 1];
 }
 
 static Media? SelectBorrowedMedia(Borrower borrower)
@@ -262,11 +302,8 @@ static Media? SelectBorrowedMedia(Borrower borrower)
     if (!list.Any()) { Console.WriteLine("Nothing borrowed."); return null; }
     for (int i = 0; i < list.Count; i++)
         Console.WriteLine($"{i + 1}. {list[i].Title}");
-    Console.Write("Select number: ");
-    if (int.TryParse(Console.ReadLine(), out var idx) && idx >= 1 && idx <= list.Count)
-        return list[idx - 1];
-    Console.WriteLine("Invalid selection.");
-    return null;
+    var idx = PromptInt("Select number", min: 1, max: list.Count);
+    return list[idx - 1];
 }
 
 static void PerformCapabilities(Media media)
@@ -278,22 +315,156 @@ static void PerformCapabilities(Media media)
     if (media is IExecutable e) e.Execute();
 }
 
-static Media? CreateMediaStub()
+// Interactive media creation
+static Media? CreateMediaInteractive()
 {
-    Console.Write("Type to create: ");
-    var type = Console.ReadLine()?.Trim().ToLower();
-    Console.Write("Title: "); var title = Console.ReadLine() ?? "Untitled";
-    Console.Write("Year: "); int.TryParse(Console.ReadLine(), out var year);
+    Console.WriteLine("\n--- Create Media ---");
+    var type = PromptString("Type (EBook/Movie/Song/VideoGame/App/Podcast/Image)", required: true).Trim().ToLower();
+    var title = PromptString("Title", required: true);
+    var year = PromptInt("Year", min: 0, max: DateTime.Now.Year);
 
-    return type switch
+    Media? media = type switch
     {
-        "ebook" => new EBook(title, year, "Author", "EN", 100, "ISBN"),
-        "movie" => new Movie(title, year, "Director", "Genre", "EN", 120),
-        "song" => new Song(title, year, "Composer", "Singer", "Genre", "mp3", 180, "EN"),
-        "videogame" => new VideoGame(title, year, "Genre", "Publisher", new[] { "PC" }),
-        "app" => new App(title, year, "1.0", "Publisher", new[] { "Windows" }, 50.0),
-        "podcast" => new Podcast(title, year, new[] { "Host" }, new[] { "Guest" }, 1, "EN", 3600),
-        "image" => new Image(title, year, "1920x1080", "jpg", 2.5, DateTime.Today),
+        "ebook" => new EBook(
+            title,
+            year,
+            PromptString("Author", required: true),
+            PromptString("Language", required: true),
+            PromptInt("Pages", min: 1),
+            PromptString("ISBN", required: true)
+        ),
+        "movie" => new Movie(
+            title,
+            year,
+            PromptString("Director", required: true),
+            PromptString("Genre", required: true),
+            PromptString("Language", required: true),
+            PromptInt("Duration (minutes)", min: 1)
+        ),
+        "song" => new Song(
+            title,
+            year,
+            PromptString("Composer", required: true),
+            PromptString("Singer", required: true),
+            PromptString("Genre", required: true),
+            PromptString("File Type (e.g. mp3)", required: true),
+            PromptInt("Duration (seconds)", min: 1),
+            PromptString("Language", required: true)
+        ),
+        "videogame" => new VideoGame(
+            title,
+            year,
+            PromptString("Genre", required: true),
+            PromptString("Publisher", required: true),
+            PromptList("Supported Platforms (comma separated)", required: true)
+        ),
+        "app" => new App(
+            title,
+            year,
+            PromptString("Version", required: true),
+            PromptString("Publisher", required: true),
+            PromptList("Supported Platforms (comma separated)", required: true),
+            PromptDouble("File Size (MB)", min: 0.01)
+        ),
+        "podcast" => new Podcast(
+            title,
+            year,
+            PromptList("Hosts (comma separated)", required: true),
+            PromptList("Guests (comma separated, blank if none)", required: false),
+            PromptInt("Episode Number", min: 1),
+            PromptString("Language", required: true),
+            PromptInt("Duration (seconds)", min: 1)
+        ),
+        "image" => new Image(
+            title,
+            year,
+            PromptString("Resolution (e.g. 1920x1080)", required: true),
+            PromptString("File Format (e.g. jpg)", required: true),
+            PromptDouble("File Size (MB)", min: 0.01),
+            PromptDate("Date Taken (yyyy-MM-dd)")
+        ),
         _ => null
     };
+
+    if (media == null)
+        Console.WriteLine("Unsupported type.");
+
+    return media;
+}
+
+// Input helpers
+static string PromptString(string label, bool required)
+{
+    while (true)
+    {
+        Console.Write($"{label}: ");
+        var input = Console.ReadLine() ?? "";
+        if (!required || !string.IsNullOrWhiteSpace(input))
+            return input.Trim();
+        Console.WriteLine("Value required.");
+    }
+}
+
+static int PromptInt(string label, int? min = null, int? max = null, bool allowZero = true)
+{
+    while (true)
+    {
+        Console.Write($"{label}: ");
+        var input = Console.ReadLine();
+        if (int.TryParse(input, out var value))
+        {
+            if (!allowZero && value == 0) { Console.WriteLine("Zero not allowed."); continue; }
+            if (min.HasValue && value < min.Value) { Console.WriteLine($"Minimum {min.Value}."); continue; }
+            if (max.HasValue && value > max.Value) { Console.WriteLine($"Maximum {max.Value}."); continue; }
+            return value;
+        }
+        Console.WriteLine("Invalid number.");
+    }
+}
+
+static double PromptDouble(string label, double? min = null)
+{
+    while (true)
+    {
+        Console.Write($"{label}: ");
+        var input = Console.ReadLine();
+        if (double.TryParse(input, NumberStyles.Any, CultureInfo.InvariantCulture, out var value))
+        {
+            if (min.HasValue && value < min.Value) { Console.WriteLine($"Minimum {min.Value}."); continue; }
+            return value;
+        }
+        Console.WriteLine("Invalid number.");
+    }
+}
+
+static string[] PromptList(string label, bool required)
+{
+    while (true)
+    {
+        Console.Write($"{label}: ");
+        var input = Console.ReadLine() ?? "";
+        if (string.IsNullOrWhiteSpace(input) && required)
+        {
+            Console.WriteLine("At least one value required.");
+            continue;
+        }
+        if (string.IsNullOrWhiteSpace(input))
+            return Array.Empty<string>();
+        return input.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim())
+            .Where(s => s.Length > 0)
+            .ToArray();
+    }
+}
+
+static DateTime PromptDate(string label)
+{
+    while (true)
+    {
+        Console.Write($"{label}: ");
+        var input = Console.ReadLine();
+        if (DateTime.TryParseExact(input, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+            return dt;
+        Console.WriteLine("Invalid date format. Use yyyy-MM-dd.");
+    }
 }

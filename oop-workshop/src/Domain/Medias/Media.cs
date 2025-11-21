@@ -60,6 +60,28 @@ namespace oop_workshop.Domain.Medias
             _ratings[borrowerId] = score; // Overwrite previous rating from same borrower
         }
 
+        // Persistence restore helpers
+        internal void RestoreBorrowState(string? borrowerId, DateTime? dueDate)
+        {
+            if (!string.IsNullOrWhiteSpace(borrowerId) && dueDate.HasValue)
+            {
+                IsBorrowed = true;
+                BorrowedById = borrowerId;
+                DueDate = dueDate;
+                _borrowerHistory.Add(borrowerId);
+            }
+        }
+
+        internal void RestoreRatings(IEnumerable<(string borrowerId, int score)> ratings)
+        {
+            foreach (var (borrowerId, score) in ratings)
+            {
+                if (string.IsNullOrWhiteSpace(borrowerId)) continue;
+                _borrowerHistory.Add(borrowerId);
+                _ratings[borrowerId] = score;
+            }
+        }
+
         public virtual void DisplayDetails()
         {
             Console.WriteLine($"Title: {Title}");
@@ -68,6 +90,7 @@ namespace oop_workshop.Domain.Medias
             if (IsBorrowed)
             {
                 Console.WriteLine($"Due Date: {DueDate:yyyy-MM-dd}");
+                Console.WriteLine($"Borrowed By: {BorrowedById}");
             }
             Console.WriteLine($"Average Rating: {AverageRating:F2} ({_ratings.Count} rating(s))");
         }
